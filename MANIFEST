@@ -1,0 +1,13 @@
+Changes
+Build.PL
+Makefile.PL
+MANIFEST
+README
+lib/SVG/Calendar.pm
+t/00-load.t
+t/pod-coverage.t
+t/pod.t
+t/kwalitee.t
+t/Calendar.t
+bin/svgcal.pl
+META.yml

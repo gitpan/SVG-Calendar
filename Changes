@@ -1,0 +1,6 @@
+Revision history for Perl extension App::Accounting.
+
+0.01  Fri May  2 14:11:54 2008
+	- original version; created by h2xs 1.23 with options
+		-X App::Accounting
+

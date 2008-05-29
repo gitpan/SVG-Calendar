@@ -1,0 +1,805 @@
+package SVG::Calendar;
+
+# Created on: 2006-04-22 10:36:43
+# Create by:  ivan
+# $Id$
+# # $Revision$, $HeadURL$, $Date$
+# # $Revision$, $Source$, $Date$
+
+use strict;
+use warnings;
+use version;
+use Carp;
+use Scalar::Util qw/blessed/;
+use Data::Dumper qw/Dumper/;
+use Clone qw/clone/;
+use Math::Trig;
+use SVG;
+use Class::Date;
+use Template;
+use Template::Provider::FromDATA;
+use Image::ExifTool qw/ImageInfo/;
+use English '-no_match_vars';
+use base qw/Exporter/;
+
+our $VERSION   = version->new('0.0.1');
+our @EXPORT_OK = qw//;
+
+sub new {
+
+	my ( $caller, %param ) = @_;
+	my $class  = ( ref $caller ) ? ref $caller : $caller;
+	my $self   = clone \%param;
+
+	bless $self, $class;
+
+	$self->init();
+
+	return $self;
+}
+
+sub init {
+	my $self    = shift;
+	my %size    = $self->get_page();
+	my %temp    = ( page => \%size, xu => $self->{page}{width_unit}, yu => $self->{page}{height_unit}, );
+	my $svg     = SVG->new( -raiseerror => 1, %size, );
+	my $height  = $self->{page}{height};
+	my $width   = $self->{page}{width};
+	my $xu      = $self->{page}{width_unit};
+	my $yu      = $self->{page}{height_unit};
+	my $xmargin = $self->{page}{margin} || $self->{page}{width} * 0.04;
+	my $ymargin = $self->{page}{margin} || $self->{page}{height} * 0.04;
+	$self->{svg}            = $svg;
+	$self->{page}{x_margin} = $xmargin;
+	$self->{page}{y_margin} = $ymargin;
+
+	# cal bounding box (bb)
+	$temp{bb} = {
+		x      => $xmargin,
+		y      => ( $height / 2 + $ymargin ),
+		height => ( $height / 2 - $ymargin * 2 ),
+		width  => ( $width - $xmargin * 2 ),
+	};
+
+	my $rows              = 6;
+	my $row_height        = $temp{bb}{height} / ( $rows + 0.5 );
+	my $row_margin_height = $row_height / ( $rows * 2 );
+	my $cols              = 8;
+	my $col_width         = $temp{bb}{width} / ( $cols + 0.5 );
+	my $col_margin_width  = $col_width / ( $cols * 2 );
+
+	for my $i ( 2 .. $rows ) {
+		my $row_y = $temp{bb}{y} + $row_margin_height * ( 2 * $i - 1 ) + $row_height * ( $i - 1 );
+		for my $j ( 2 .. $cols ) {
+			my $x = ( $temp{bb}{x} + $col_margin_width * ( 2 * $j - 1 ) + $col_width * ( $j - 1 ) ) - $col_width / 2;
+			my $y = $row_y - $row_height / 2;
+			$temp{cal}[ $i - 1 ][ $j - 1 ] = {
+				x      => $x,
+				y      => $y,
+				height => $row_height,
+				width  => $col_width,
+				text   => {
+					x      => $x + $col_margin_width * 0.1,
+					y      => $y + $row_height * 0.15,
+					length => $col_width * 0.1,
+					class  => 'mday ',
+					style  => 'font-size: ' . ( $row_height * 0.145 ),
+				},
+			};
+		}
+	}
+
+	# set up the week day headings
+	my $count = 1;
+	for my $day (qw/Mon Tue Wed Thu Fri Sat Sun/) {
+		my $x = $temp{bb}{x} + $col_margin_width * ( 2 * $count + 1 ) + $col_width * ( $count - 1 ) + $col_width / 2;
+		my $y = $temp{bb}{y} + $row_margin_height;
+		$temp{cal}[0][$count] = {
+			x      => $x,
+			y      => $y,
+			height => $row_height / 2,
+			width  => $col_width,
+			text   => {
+				text   => $day,
+				x      => $x + $col_width / 2,
+				y      => $y + $row_height * 0.4,
+				length => $col_width * 0.8,
+				adjust => 'spacing',                                #AndGlyphs',
+				class  => 'day ' . lc $day,
+				style  => 'font-size: ' . ( $row_height * 0.45 ),
+			},
+		};
+		$count++;
+	}
+
+	# set up the week of the year column
+	$count = 1;
+	for my $week ( 1 .. 5 ) {
+		my $x = $temp{bb}{x} + $col_margin_width;
+		my $y = $temp{bb}{y} + $row_margin_height * ( 2 * $count + 1 ) + $row_height * ( $count - 1 ) + $row_height / 2;
+		$temp{cal}[$count][0] = {
+			x      => $x,
+			y      => $y,
+			height => $row_height,
+			width  => $col_width / 2,
+			text   => {
+				text   => $week,
+				x      => $x + $col_width / 4,
+				y      => $y + $row_height * 0.9,
+				length => $col_width * 0.8,
+				adjust => 'spacing',                                #AndGlyphs',
+				class  => 'week',
+				style  => 'font-size: ' . ( $row_height * 0.45 ),
+			},
+		};
+		$count++;
+	}
+
+	# get the month display stuff
+	$temp{month} = {
+		x     => $temp{bb}{x} + $col_margin_width * 2,
+		y     => $temp{bb}{y} - $ymargin,
+		style => 'font-size: ' . ($row_height),
+	};
+
+	$self->{template} = \%temp;
+
+	return;
+}
+
+sub get_page {
+
+	my $self = shift;
+	my $page = ref $self->{page} ? $self->{page}{page} : $self->{page};
+	my %size = ( width => '210.00mm', height => '297.00mm' );
+
+	if ($page) {
+		%size =
+			  $page eq 'A0' ? ( width => '840.00mm', height => '1188.00mm' )
+			: $page eq 'A1' ? ( width => '594.00mm', height => '840.00mm' )
+			: $page eq 'A2' ? ( width => '420.00mm', height => '594.00mm' )
+			: $page eq 'A3' ? ( width => '297.00mm', height => '420.00mm' )
+			: $page eq 'A4' ? ( width => '210.00mm', height => '297.00mm' )
+			: $page eq 'A5' ? ( width => '148.50mm', height => '210.00mm' )
+			: $page eq 'A6' ? ( width => '105.00mm', height => '148.50mm' )
+			:                 croak "Unknown page type '$page'!\n";
+	}
+
+	if ( ref $self->{page} && $self->{page}{width} ) {
+		$size{width} = $self->{page}{width};
+	}
+	if ( ref $self->{page} && $self->{page}{height} ) {
+		$size{height} = $self->{page}{height};
+	}
+
+	# Get the values to internal variables
+	my ( $width, $width_unit ) = $size{width} =~ /\A(.+?)(px|pt|mm|cm|m|in)?\Z/xms;
+	$width *= 1.0;
+	croak "Unable to get a width from $self->{page} or $self->{width}" if !$width;
+	$width_unit ||= 'px';
+
+	my ( $height, $height_unit ) = $size{height} =~ /\A(.+?)(px|pt|mm|cm|m|in)?\Z/xms;
+	$height *= 1.0;
+	croak "Unable to get a height from $self->{page} or $self->{height}" if !$height;
+	$height_unit ||= 'px';
+
+	# store the internal variables
+	if ( !ref $self->{page} ) {
+		$self->{page} = {};
+	}
+	$self->{page}{width}       = $width;
+	$self->{page}{width_unit}  = $width_unit;
+	$self->{page}{height}      = $height;
+	$self->{page}{height_unit} = $height_unit;
+
+	return (
+		width       => $width,
+		width_unit  => $width_unit,
+		height      => $height,
+		height_unit => $height_unit,
+	);
+}
+
+sub output_year {
+
+	my ( $self, @params ) = shift;
+	my ( $year, $start, $end, $file );
+
+	if ( @params == 3 ) {
+		( $start, $end, $file ) = @params;
+		$start = Class::Date->new("$start-01");
+		$end   = Class::Date->new("$end-01");
+	}
+	else {
+		( $year, $file ) = @params;
+		$start = Class::Date->new("$year-01-01");
+		$end   = $start + '11M';                    ## no critic
+	}
+	carp "$start - $end";
+
+	my @files;
+	while ( $start <= $end ) {
+		my $month = $start->strftime('%Y-%m');
+		carp $month;
+		push @files, "$file-$month.svg";
+		$self->output_month( $month, "$file-$month.svg" );
+		$start += '1M';                             ## no critic
+	}
+
+	return @files;
+}
+
+sub output_month {
+
+	my ( $self, $month, $file, ) = @_;
+
+	# add the month specific details to a clone of the general settings
+	my $templ = clone $self->{template};
+	my $svg   = $self->{svg};
+
+	carp "Month '$month' is not the correct format (YYYY-MM) " if !$month || $month !~ /\A\d{4}-\d{2}\Z/xms;
+
+	my $date = Class::Date->new("$month-01");
+	$templ->{month}{text} = $date->monthname();
+	my $month_day = $date - '7D';    ## no critic
+	my $row       = 1;
+	my $wrap      = 0;
+
+	# make sure that we start on a monday
+	while ( $month_day->wday() != 2 ) {
+		$month_day += '1D';          ## no critic
+	}
+
+	for my $count ( 1 .. 42 ) {
+
+		# get the day of the week (of the first day of the month)
+		my $wday = $month_day->wday();
+		$wday = $wday == 1 ? 7 : $wday - 1;
+		my $r = $templ->{cal}[$row][$wday]{width} / 8;
+
+		$templ->{cal}[$row][$wday]{text}{text} = $month_day->mday();
+		$templ->{cal}[$row][$wday]{current} = $date->month() == $month_day->month() ? 1 : 2;
+		if ( $date->month() == $month_day->month() ) {
+			$templ->{cal}[$row][$wday]{text}{class} .= 'current_month';
+		}
+
+		if ( $self->{moon} && $self->{moon}{display} ) {
+
+			# get the phase info at 8:00pm
+			my $moon_date = $month_day + '20h';                  ## no critic
+			my $phase     = $self->get_moon_phase($moon_date);
+			$templ->{cal}[$row][$wday]{moon} = $self->moon(
+				phase => $phase,
+				id    => 'moon_' . $month_day->strftime('%Y-%m-%d'),
+				x     => $templ->{cal}[$row][$wday]{x} + $r + $templ->{cal}[$row][$wday]{width} * 0.05,
+				y     => $templ->{cal}[$row][$wday]{y} - $r + $templ->{cal}[$row][$wday]{height} * 0.8,
+				r     => $r,
+			);
+		}
+
+		if ( $wday == 7 ) {
+			$row++;
+		}
+		if ( $row > 5 ) {
+			$row  = 1;
+			$wrap = 1;
+		}
+		$month_day += '1D';    ## no critic
+
+		# stop if we leave the current month.
+		last if $wrap && $date->month() != $month_day->month();
+	}
+
+	# process the image if present
+	if ( $self->{image} && ( $self->{image}{src} || $self->{image}{$month} ) ) {
+		my $image = $self->{image}{$month} || $self->{image}{src};
+		$templ->{image}{src} = $image;
+
+		$templ->{image}{x} = $self->{page}{x_margin};
+		$templ->{image}{y} = $self->{page}{y_margin};
+
+		if ( -f $image ) {
+			my $info = ImageInfo($image);
+			if ( $info->{ImageHeight} && $info->{ImageWidth} ) {
+				$templ->{image}{x}      = $self->{page}{x_margin};
+				$templ->{image}{y}      = $self->{page}{y_margin};
+				$templ->{image}{width}  = $info->{ImageWidth};    # $self->{page}{width}  - 2 * $self->{page}{x_margin};
+				$templ->{image}{height} = $info->{ImageHeight};   #$self->{page}{height} / 2 - $self->{page}{y_margin};
+			}
+		}
+	}
+
+	return $self->output( $file, $templ );
+}
+
+sub output {
+
+	my ( $self, $file, $template ) = @_;
+
+	#my $svg	= $self->{svg};
+	my $fh;
+	my %option = ( EVAL_PERL => 1 );
+	if ( $self->{path} ) {
+		$option{INCLUDE_PATH} = $self->{path};
+	}
+	else {
+		my $provider = Template::Provider::FromDATA->new( { CLASSES => __PACKAGE__ } );
+		$option{LOAD_TEMPLATES} = [$provider];
+	}
+
+	my $tmpl = $self->{tt} || Template->new(%option);
+
+	#my $text = $svg->xmlify();
+	my $text;
+	$tmpl->process( 'calendar.svg', $template, \$text )
+		or croak( $tmpl->error );
+
+	if ($file) {
+		if ( $file eq q/-/ ) {
+			print $text or carp "Could not write to STDOUT: $OS_ERROR\n";
+		}
+		else {
+			open $fh, q/>/, $file or croak "Cannot write SVG to file '$file': $!\n";
+
+			print {$fh} $text or carp "Could not write to file '$file': $OS_ERROR\n";
+
+			close $fh or carp "There was an issue closing file '$file': $OS_ERROR\n";
+		}
+	}
+
+	$self->{tt} = $tmpl;
+	return $text;
+}
+
+sub moon {
+
+	my ( $self, %params ) = @_;
+
+	my $phase  = $params{phase};
+	my $id     = $params{id};
+	my $x      = $params{x} || 100;
+	my $y      = $params{y} || 100;
+	my $r      = $params{r} || 100;
+	my $svg    = $self->{svg};
+	my $error  = 2 * pi / 56;         # approx error of less than one lunar day
+	my $style  = q//;
+
+	# extra testing
+	my $g = $svg->g( id => "extra_$id", class => 'moon', );
+
+	# moon phases 0 == new moon 3 == last quarter
+
+	$r ||= 100;
+	my ( $sx, $sy ) = ( $x, $y );
+	my ( $ex, $ey ) = ( $x, $y + 2 * $r );
+
+	if ( $phase < $error || 2 * pi - $error < $phase ) {
+
+		#carp "New moon\n";
+		$style = 'stroke: red';
+	}
+	elsif ( pi - $error < $phase && $phase < pi + $error ) {
+
+		# approx full moon
+		$g->circle(
+			id    => $id,
+			style => 'fill: blue; stroke: none',
+			cx    => $x,
+			cy    => ( $sy + $ey ) / 2,
+			r     => $r,
+		);
+
+		#carp "Full moon\n";
+	}
+	elsif ( $phase < pi ) {
+
+		# moon waxing partial
+		my $d = "M $sx\t$sy C ";
+		$d .= ( $sx + $r * 1.34 ) . q/ / . $sy . q/,/;
+		$d .= ( $sx + $r * 1.34 ) . q/ / . $ey;
+		$d .= ",$ex\t$ey C ";
+		$d .= ( $ex - $r * 1.34 * ( -cos($phase) ) ) . q/ / . ( $ey + $r / 2 * ( -sin($phase) ) ) . q/,/;
+		$d .= ( $ex - $r * 1.34 * ( -cos($phase) ) ) . q/ / . ( $sy - $r / 2 * ( -sin($phase) ) );
+		$d .= ", $sx\t$sy Z";
+		$g->path(
+			id    => $id,
+			style => q//,
+			d     => $d,
+		);
+
+		#carp "waxing\t\t$d\n";
+	}
+	elsif ( $phase > pi ) {
+
+		# moon waning partial
+		my $d = "M $sx\t$sy C ";
+		$d .= ( $sx - $r * 1.34 ) . q/ / . $sy . q/,/;
+		$d .= ( $sx - $r * 1.34 ) . q/ / . $ey;
+		$d .= ",$ex\t$ey C ";
+		$d .= ( $ex + $r * 1.34 * ( -cos($phase) ) ) . q/ / . ( $ey - $r / 2 * ( -sin($phase) ) ) . q/,/;
+		$d .= ( $ex + $r * 1.34 * ( -cos($phase) ) ) . q/ / . ( $sy + $r / 2 * ( -sin($phase) ) );
+		$d .= ", $sx\t$sy Z";
+		$g->path(
+			id    => $id,
+			style => q//,
+			d     => $d,
+		);
+
+		#carp "waning\t\t$d\n";
+	}
+
+	$g->circle(
+		id    => "moon_border_$id",
+		class => 'outline',
+		style => $style,
+		cx    => $x,
+		cy    => ( $sy + $ey ) / 2,
+		r     => $r,
+	);
+
+	return $g->xmlify();
+}
+
+sub get_moon_phase {
+
+	my ( $self, $date ) = @_;
+
+	if ( !blessed $date || !$date->isa('Class::Date') ) {
+		$date = Class::Date->new($date);
+	}
+
+	if ( !$date ) {
+		carp 'Unable to create a date!';
+	}
+
+	# check if we have a way to calculate the phase of the moon
+	if ( !$self->{moon_phase} ) {
+		my @packages = qw/Astro::Coord::ECI::Moon Astro::MoonPhase/;
+
+		for my $package (@packages) {
+			my $package_file = $package;
+			$package_file =~ s{::}{/}gxms;
+
+			require $package_file . '.pm';
+			if ( !$EVAL_ERROR ) {
+				$self->{moon_phase} = $package;
+				last;
+			}
+		}
+
+		# croak if there is no way to calculate the phase of the moon
+		if ( !$self->{moon_phase} ) {
+			croak "Cannot find any packages installed to calculate the moon phase\nTry installing one of:\ncpan "
+				. join( "\ncpan ", @packages ) . "\n";
+		}
+	}
+
+	my $phase;
+	if ( $self->{moon_phase} eq 'Astro::Coord::ECI::Moon' ) {
+
+		# phase in radians
+		$phase = Astro::Coord::ECI::Moon->phase( $date->epoch() );
+	}
+	elsif ( $self->{moon_phase} eq 'Astro::MoonPhase' ) {
+
+		# phase in fraction of circle
+		($phase) = Astro::MoonPhase::phase( $date->epoch() );
+		$phase *= 2 * pi;
+	}
+	elsif ( $self->{moon_phase} eq 'DateTime::Util::Astro::Moon' ) {
+
+		# phase in degrees
+		($phase) = DateTime::Util::Astro::Moon::lunar_phase( DateTime->new( $date->epoch() ) );
+		$phase *= 2 * pi / 360;
+	}
+
+	return $phase;
+}
+
+1;
+
+__DATA__
+
+=head1 NAME
+
+SVG::Calendar - Creates calendars in SVG format which can be printed
+
+=head1 VERSION
+
+This documentation refers to SVG::Calendar version 0.1.
+
+=head1 SYNOPSIS
+
+   use SVG::Calendar;
+
+   # Brief but working code example(s) here showing the most common usage(s)
+   # This section will be as far as many users bother reading, so make it as
+   # educational and exemplary as possible.
+
+   # Create a new (basic) SVG::Calendar object for producing A4 calendars
+   my $svg = SVG::Calendar->new( page => 'A4' );
+
+   # print to standard out the calendar for June 2006
+   print $svg->output_month( '2006-06' );
+
+   # create a calendar for the year 2007
+   $svg->output_year( );
+
+=head1 DESCRIPTION
+
+This module generates an SVG image for one or more months for a calendar.
+
+=head1 SUBROUTINES/METHODS
+
+=head3 C<new ( %args )>
+
+Arg: C<page> - hash ref - description
+
+Arg: C<moon> - hash ref - description
+
+Arg: C<image> - hash ref - description
+
+Arg: C<path> - string - Directory containing alternate svg template version
+
+Return: SVG::Calendar - A new SVG::Calendar object
+
+Description: Creates and sets up a new SVG::Calendar object
+
+=head3 C<init ( )>
+
+Initialises the calendar object
+
+=head3 C<get_page ( )>
+
+Return:  -
+
+Description:
+
+=head3 C<output_year ( ($start, $end | $year), $file  )>
+
+Param: C<$start> - string ('YYYY-MM') - description
+
+Param: C<$end> - string ('YYYY-MM') - description
+
+Param: C<$year> - int (year) - description
+
+Param: C<$file> - string - The base name for the SVG files calendars for each
+year
+
+Return: list - A list of the files created
+
+Description: Creates the SVG calendar files for each month of the year (or for
+each month from start and end)
+
+ eg $svg->output_year( 2006, 'folowers' );
+
+ Will result in the following files created
+
+ flowers-2006-01.svg
+ flowers-2006-02.svg
+ ..
+ flowers-2006-11.svg
+ flowers-2006-12.svg
+
+=head3 C<output_month ( $month, $file,  )>
+
+Param: C<$month> - string (detail) - The month that the calendar page should
+display (format YYYY-MM)
+
+Param: C<$file> - string (detail) - The file to save the output to if defined.
+if $file eq '-' prints to STDOUT
+
+Return: string - The SVG text to display the calendar page
+
+Description: Outputs a particular months calendar...
+
+(Adds the week of the year and the
+
+=head3 C<output ( $file )>
+
+Param: C<$file> - string (detail) - The file name to print the SVG file to (if undefined it will print nothing)
+
+Return: scalar - The SVG text.
+
+Description:
+
+  <path
+     style="fill:none;fill-opacity:0.75000000;fill-rule:evenodd;stroke:#000000;stroke-width:0.25000000pt;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1.0000000"
+     d="M 264.88031,225.97672 C 518.24408,341.14207 267.18361,490.85702 267.18361,490.85702 L 264.88031,225.97672 z "
+     id="path1460"
+     sodipodi:nodetypes="ccc" />
+  <path
+     style="fill:none;fill-opacity:0.75000000;fill-rule:evenodd;stroke:#000000;stroke-width:0.25000000pt;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1.0000000"
+     d="M 628.80282,189.12380 C 854.52691,299.68254 847.54045,393.30582 626.49951,477.03718 C 579.56639,494.81567 769.30455,334.23215 628.80282,189.12380 z "
+     id="path1464"
+     sodipodi:nodetypes="csc" />
+  <path
+     style="fill: green; fill-opacity: 0.25; stroke: black;"
+     d="M 0 0 C 133.3333 8, 133.3333 192, 0 200 C -133.333 192 -133.3333 8 Z"
+        M 0 0 C 133.3333 8  133.3333 192, 0 200 C -133.333 192 -133.3333 8 Z
+     id="test" />
+  <circle
+     style="fill: none; stroke: red; stroke-opacity: 0.5"
+     cx="0"
+     cy="100"
+     r="100"
+     id="circle" />
+
+
+=head3 C<moon ( $var1, $var2,  )>
+
+Param: C<$phase> - float - 0 <= $phase < 2 * pi, represents the phase of the moon
+
+Param: C<$id> - string (detail) - description
+
+Return:  -
+
+Description:
+
+=head3 C<get_moon_phase ( $date )>
+
+Param: C<$date> - date (Class::Date object or string to convert to one) - The
+date that the moon phase is desired
+
+Return: float - The phase of the moon from 0 (new moon) via 2 (full moon) to
+< 4 (next new moon)
+
+Description: This method calculates the phase of the moon (it will what ever
+it can find to calculate the phase)
+
+=head1 DIAGNOSTICS
+
+A list of every error and warning message that the module can generate (even
+the ones that will "never happen"), with a full explanation of each problem,
+one or more likely causes, and any suggested remedies.
+
+=head1 CONFIGURATION AND ENVIRONMENT
+
+A full explanation of any configuration system(s) used by the module, including
+the names and locations of any configuration files, and the meaning of any
+environment variables or properties that can be set. These descriptions must
+also include details of any configuration language used.
+
+=head1 DEPENDENCIES
+
+A list of all of the other modules that this module relies upon, including any
+restrictions on versions, and an indication of whether these required modules
+are part of the standard Perl distribution, part of the module's distribution,
+or must be installed separately.
+
+=head1 INCOMPATIBILITIES
+
+A list of any modules that this module cannot be used in conjunction with.
+This may be due to name conflicts in the interface, or competition for system
+or program resources, or due to internal limitations of Perl (for example, many
+modules that use source code filters are mutually incompatible).
+
+=head1 BUGS AND LIMITATIONS
+
+A list of known problems with the module, together with some indication of
+whether they are likely to be fixed in an upcoming release.
+
+Also, a list of restrictions on the features the module does provide: data types
+that cannot be handled, performance issues and the circumstances in which they
+may arise, practical limitations on the size of data sets, special cases that
+are not (yet) handled, etc.
+
+The initial template usually just has:
+
+There are no known bugs in this module.
+
+Please report problems to Ivan Wills (ivan.wills@gmail.com).
+
+Patches are welcome.
+
+=head1 AUTHOR
+
+Ivan Wills - (ivan.wills@gmail.com)
+<Author name(s)>  (<contact address>)
+
+=head1 LICENSE AND COPYRIGHT
+
+Copyright (c) 2006 Ivan Wills (101 Miles St Bald Hills QLD Australia 4036).
+All rights reserved.
+
+
+This module is free software; you can redistribute it and/or modify it under
+the same terms as Perl itself. See L<perlartistic>.  This program is
+distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+without even the implied warranty of MERCHANTABILITY or FITNESS FOR A
+PARTICULAR PURPOSE.
+
+=cut
+
+__calendar.svg__
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.0//EN" "http://www.w3.org/TR/2001/REC-SVG-20010904/DTD/svg10.dtd">
+<svg height="[% page.height %][% yu %]"
+	width="[% page.width %][% xu %]"
+	viewBox="0 0 [% page.width %] [% page.height %]"
+	xmlns="http://www.w3.org/2000/svg"
+	xmlns:xlink="http://www.w3.org/1999/xlink"
+	xmlns:sodipodi="http://inkscape.sourceforge.net/DTD/sodipodi-0.dtd"
+	xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape">
+	<defs>
+		<style >
+		<![CDATA[
+			.bb {
+				fill:         none;
+				stroke:       blue;
+				stroke-width: 0.5;
+			}
+			.day, .week {
+				text-anchor:  middle;
+			}
+			.xx {
+				fill:         none;
+				stroke:       black;
+				stroke-width: 0.5;
+			}
+			.mday {
+				fill:         silver;
+				text-anchor:  right;
+			}
+			.current_month {
+				fill:         black;
+			}
+			.moon circle {
+				stroke-width: 25%;
+				fill:         none;
+			}
+			g.mday {
+				fill:         silver;
+				fill-opacity: 50%;
+			}
+			g.mday circle {
+				stroke:       silver;
+			}
+			g.current_month {
+				fill:         black;
+				fill-opacity: 1;
+			}
+			g.current_month circle {
+				stroke:       black;
+			}
+		]]>
+		</style>
+	</defs>
+	<g
+		inkscape:groupmode="layer"
+		id="image"
+		inkscape:label="image">
+		[% IF image.src %]
+		<image xlink:href="[% image.src %]" x="[% image.x %]" y="[% image.y %]" height="[% image.height %]" width="[% image.width %]"/>
+		[% END %]
+	</g>
+	<g
+		inkscape:groupmode="layer"
+		id="calendar"
+		inkscape:label="calendar">
+		<text id="month" x="[% month.x %]" y="[% month.y %]" style="[% month.style %]" >[% month.text %]</text>
+		<rect class="bb" id="a" style="" height="[% bb.height %]" width="[% bb.width %]" x="[% bb.x %]" y="[% bb.y %]" />
+		[% i = 0 -%]
+		[% FOREACH row IN cal -%]
+			[% j = 0 -%]
+			[% FOREACH col IN row %]
+		<g id="row[% i %]_col[% j %]" class="box [% IF current == 1 %]current[% ELSIF current == 2 %]off[% END %] [% col.text.class %]">
+			<rect class="xx" id="box_row[% i %]_col[% j %]" height="[% col.height %]" width="[% col.width %]" x="[% col.x %]" y="[% col.y %]" />
+			[% IF col.text %]<text
+				id="text_row[% i %]_col[% j %]"
+				class="[% col.text.class %]"
+				x="[% col.text.x %]"
+				y="[% col.text.y %]"
+				[% IF col.text.style %]style="[% col.text.style %]"[% END %]
+				[% IF col.text.length %]textLength="[% col.text.length %]"[% END %]
+				[% IF col.text.adjust %]lengthAdjust="[% col.text.adjust %]"[% END %]>
+				[% col.text.text %]</text>[% END %]
+			[% IF col.moon %][% col.moon %][% END %]
+		</g>
+				[%- j=j+1 -%]
+			[% END -%]
+			[% i=i+1 -%]
+		[% END %]
+		[% extra %]
+	</g>
+</svg>
