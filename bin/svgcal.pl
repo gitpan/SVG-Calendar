@@ -1,4 +1,4 @@
-#!/usr/bin/perl -Ilib
+#!/usr/bin/perl -t
 
 # Created on: 2006-05-05 22:44:23
 # Create by:  ivan
@@ -16,7 +16,7 @@ use Config::Std;
 use Data::Dumper qw/Dumper/;
 use SVG::Calendar;
 
-our $VERSION = version->new('0.1');
+our $VERSION = version->new('0.1.1');
 
 my %option = (
 	moon     => {},
@@ -164,7 +164,7 @@ This documentation refers to svgcal.pl version 0.1.
 =head1 SYNOPSIS
 
    svgcal.pl [option] --date {see below}
-   svgcal.pl [--verbose | --VERSION | --help | --man]]
+   svgcal.pl [--verbose | --VERSION | --help | --man]
 
  OPTIONS:
   -d --date      Parameters that control the months displaied on the
@@ -192,9 +192,10 @@ This documentation refers to svgcal.pl version 0.1.
   -C --config    Location of the configuration file (Default ~/.svgcal)
   -P --path=template path
                  Specify a colon seperated path to find templates in
-  -t --template=template
-                 The name of the template to use instead of the default
-                 template 'calendar.svg'
+  -t --template=template_dir
+                 The name of a template directory to use instead of the
+                 default templates (expects to find a template there called
+                 calendar.svg)
   -s --save      Save any other command line options to your config file
      --show-template
                  Displays the default template used by SVG::Calendar,

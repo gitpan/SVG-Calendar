@@ -18,12 +18,40 @@ use SVG;
 use Class::Date;
 use Template;
 use Template::Provider::FromDATA;
+use Readonly;
 use Image::ExifTool qw/ImageInfo/;
 use English '-no_match_vars';
 use base qw/Exporter/;
 
-our $VERSION   = version->new('0.0.1');
+our $VERSION   = version->new('0.0.5');
 our @EXPORT_OK = qw//;
+
+Readonly my $MARGIN_RATIO             => 0.04;
+Readonly my $DAY_COLS                 => 8;
+Readonly my $ROUNDING_FACTOR          => 0.5;
+Readonly my $TEXT_OFFSET_Y            => 0.1;
+Readonly my $TEXT_OFFSET_X            => 0.15;
+Readonly my $TEXT_WIDTH_RATIO         => 0.1;
+Readonly my $TEXT_HEIGHT_RATIO        => 0.145;
+Readonly my $MOON_SCALE_WIDTH         => 0.05;
+Readonly my $MOON_SCALE_HEIGHT        => 0.8;
+Readonly my $HEADING_WIDTH_SCALE      => 0.8;
+Readonly my $HEADING_HEIGHT_SCALE     => 0.45;
+Readonly my $HEADING_DOW_WIDTH_SCALE  => 2;
+Readonly my $HEADING_DOW_HEIGHT_SCALE => 0.4;
+Readonly my $HEADING_WOY_WIDTH_SCALE  => 4;
+Readonly my $HEADING_WOY_HEIGHT_SCALE => 0.9;
+Readonly my $MAX_WEEK_ROW             => 5;
+Readonly my $MAX_DAYS                 => 42;
+Readonly my $INTERVAL_ONE_DAY         => q{1D};
+Readonly my $INTERVAL_ONE_WEEK        => q{7D};
+Readonly my $INTERVAL_ONE_MONTH       => q{1M};
+Readonly my $INTERVAL_ELEVEN_MONTHS   => q{11M};
+Readonly my $FULL_MOON                => 100;
+Readonly my $MOON_RADIAL_STEP         => 1.34;
+Readonly my $MOON_AT_NIGHT            => q{20};
+Readonly my $FULL_CIRCLE_DEGREES      => 360;
+Readonly my $ONE_WEEK                 => 7;
 
 sub new {
 
@@ -47,8 +75,8 @@ sub init {
 	my $width   = $self->{page}{width};
 	my $xu      = $self->{page}{width_unit};
 	my $yu      = $self->{page}{height_unit};
-	my $xmargin = $self->{page}{margin} || $self->{page}{width} * 0.04;
-	my $ymargin = $self->{page}{margin} || $self->{page}{height} * 0.04;
+	my $xmargin = $self->{page}{margin} || $self->{page}{width} * $MARGIN_RATIO;
+	my $ymargin = $self->{page}{margin} || $self->{page}{height} * $MARGIN_RATIO;
 	$self->{svg}            = $svg;
 	$self->{page}{x_margin} = $xmargin;
 	$self->{page}{y_margin} = $ymargin;
@@ -61,15 +89,18 @@ sub init {
 		width  => ( $width - $xmargin * 2 ),
 	};
 
-	my $rows              = 6;
-	my $row_height        = $temp{bb}{height} / ( $rows + 0.5 );
+	my $rows              = $MAX_WEEK_ROW + 1;
+	my $row_height        = $temp{bb}{height} / ( $rows + $ROUNDING_FACTOR );
 	my $row_margin_height = $row_height / ( $rows * 2 );
-	my $cols              = 8;
-	my $col_width         = $temp{bb}{width} / ( $cols + 0.5 );
+	my $cols              = $DAY_COLS;
+	my $col_width         = $temp{bb}{width} / ( $cols + $ROUNDING_FACTOR );
 	my $col_margin_width  = $col_width / ( $cols * 2 );
 
+	# setup the day boxes row by row
 	for my $i ( 2 .. $rows ) {
 		my $row_y = $temp{bb}{y} + $row_margin_height * ( 2 * $i - 1 ) + $row_height * ( $i - 1 );
+
+		# setup the individual days
 		for my $j ( 2 .. $cols ) {
 			my $x = ( $temp{bb}{x} + $col_margin_width * ( 2 * $j - 1 ) + $col_width * ( $j - 1 ) ) - $col_width / 2;
 			my $y = $row_y - $row_height / 2;
@@ -79,11 +110,11 @@ sub init {
 				height => $row_height,
 				width  => $col_width,
 				text   => {
-					x      => $x + $col_margin_width * 0.1,
-					y      => $y + $row_height * 0.15,
-					length => $col_width * 0.1,
+					x      => $x + $col_margin_width * $TEXT_OFFSET_X,
+					y      => $y + $row_height * $TEXT_OFFSET_X,
+					length => $col_width * $TEXT_WIDTH_RATIO,
 					class  => 'mday ',
-					style  => 'font-size: ' . ( $row_height * 0.145 ),
+					style  => 'font-size: ' . ( $row_height * $TEXT_HEIGHT_RATIO ),
 				},
 			};
 		}
@@ -101,12 +132,12 @@ sub init {
 			width  => $col_width,
 			text   => {
 				text   => $day,
-				x      => $x + $col_width / 2,
-				y      => $y + $row_height * 0.4,
-				length => $col_width * 0.8,
+				x      => $x + $col_width / $HEADING_DOW_WIDTH_SCALE,
+				y      => $y + $row_height * $HEADING_DOW_HEIGHT_SCALE,
+				length => $col_width * $HEADING_WIDTH_SCALE,
 				adjust => 'spacing',                                #AndGlyphs',
 				class  => 'day ' . lc $day,
-				style  => 'font-size: ' . ( $row_height * 0.45 ),
+				style  => 'font-size: ' . ( $row_height * $HEADING_HEIGHT_SCALE ),
 			},
 		};
 		$count++;
@@ -114,7 +145,7 @@ sub init {
 
 	# set up the week of the year column
 	$count = 1;
-	for my $week ( 1 .. 5 ) {
+	for my $week ( 1 .. $MAX_WEEK_ROW ) {
 		my $x = $temp{bb}{x} + $col_margin_width;
 		my $y = $temp{bb}{y} + $row_margin_height * ( 2 * $count + 1 ) + $row_height * ( $count - 1 ) + $row_height / 2;
 		$temp{cal}[$count][0] = {
@@ -124,12 +155,12 @@ sub init {
 			width  => $col_width / 2,
 			text   => {
 				text   => $week,
-				x      => $x + $col_width / 4,
-				y      => $y + $row_height * 0.9,
-				length => $col_width * 0.8,
+				x      => $x + $col_width / $HEADING_WOY_WIDTH_SCALE,
+				y      => $y + $row_height * $HEADING_WOY_HEIGHT_SCALE,
+				length => $col_width * $HEADING_WIDTH_SCALE,
 				adjust => 'spacing',                                #AndGlyphs',
 				class  => 'week',
-				style  => 'font-size: ' . ( $row_height * 0.45 ),
+				style  => 'font-size: ' . ( $row_height * $HEADING_HEIGHT_SCALE ),
 			},
 		};
 		$count++;
@@ -205,7 +236,7 @@ sub output_year {
 	my ( $self, @params ) = shift;
 	my ( $year, $start, $end, $file );
 
-	if ( @params == 3 ) {
+	if ( @params == 3 ) {                           ## no critic
 		( $start, $end, $file ) = @params;
 		$start = Class::Date->new("$start-01");
 		$end   = Class::Date->new("$end-01");
@@ -213,7 +244,7 @@ sub output_year {
 	else {
 		( $year, $file ) = @params;
 		$start = Class::Date->new("$year-01-01");
-		$end   = $start + '11M';                    ## no critic
+		$end   = $start + $INTERVAL_ELEVEN_MONTHS;
 	}
 	carp "$start - $end";
 
@@ -223,7 +254,7 @@ sub output_year {
 		carp $month;
 		push @files, "$file-$month.svg";
 		$self->output_month( $month, "$file-$month.svg" );
-		$start += '1M';                             ## no critic
+		$start += $INTERVAL_ONE_MONTH;
 	}
 
 	return @files;
@@ -241,21 +272,22 @@ sub output_month {
 
 	my $date = Class::Date->new("$month-01");
 	$templ->{month}{text} = $date->monthname();
-	my $month_day = $date - '7D';    ## no critic
+	my $month_day = $date - $INTERVAL_ONE_WEEK;
 	my $row       = 1;
 	my $wrap      = 0;
 
 	# make sure that we start on a monday
 	while ( $month_day->wday() != 2 ) {
-		$month_day += '1D';          ## no critic
+		$month_day += $INTERVAL_ONE_DAY;
 	}
 
-	for my $count ( 1 .. 42 ) {
+	DAY:
+	for my $count ( 1 .. $MAX_DAYS ) {
 
 		# get the day of the week (of the first day of the month)
 		my $wday = $month_day->wday();
-		$wday = $wday == 1 ? 7 : $wday - 1;
-		my $r = $templ->{cal}[$row][$wday]{width} / 8;
+		$wday = $wday == 1 ? $ONE_WEEK : $wday - 1;
+		my $r = $templ->{cal}[$row][$wday]{width} / $DAY_COLS;
 
 		$templ->{cal}[$row][$wday]{text}{text} = $month_day->mday();
 		$templ->{cal}[$row][$wday]{current} = $date->month() == $month_day->month() ? 1 : 2;
@@ -266,28 +298,28 @@ sub output_month {
 		if ( $self->{moon} && $self->{moon}{display} ) {
 
 			# get the phase info at 8:00pm
-			my $moon_date = $month_day + '20h';                  ## no critic
+			my $moon_date = $month_day + $MOON_AT_NIGHT;
 			my $phase     = $self->get_moon_phase($moon_date);
 			$templ->{cal}[$row][$wday]{moon} = $self->moon(
 				phase => $phase,
 				id    => 'moon_' . $month_day->strftime('%Y-%m-%d'),
-				x     => $templ->{cal}[$row][$wday]{x} + $r + $templ->{cal}[$row][$wday]{width} * 0.05,
-				y     => $templ->{cal}[$row][$wday]{y} - $r + $templ->{cal}[$row][$wday]{height} * 0.8,
+				x     => $templ->{cal}[$row][$wday]{x} + $r + $templ->{cal}[$row][$wday]{width} * $MOON_SCALE_WIDTH,
+				y     => $templ->{cal}[$row][$wday]{y} - $r + $templ->{cal}[$row][$wday]{height} * $MOON_SCALE_HEIGHT,
 				r     => $r,
 			);
 		}
 
-		if ( $wday == 7 ) {
+		if ( $wday == $ONE_WEEK ) {
 			$row++;
 		}
-		if ( $row > 5 ) {
+		if ( $row > $MAX_WEEK_ROW ) {
 			$row  = 1;
 			$wrap = 1;
 		}
-		$month_day += '1D';    ## no critic
+		$month_day += $INTERVAL_ONE_DAY;
 
 		# stop if we leave the current month.
-		last if $wrap && $date->month() != $month_day->month();
+		last DAY if $wrap && $date->month() != $month_day->month();
 	}
 
 	# process the image if present
@@ -357,25 +389,26 @@ sub moon {
 
 	my $phase  = $params{phase};
 	my $id     = $params{id};
-	my $x      = $params{x} || 100;
-	my $y      = $params{y} || 100;
-	my $r      = $params{r} || 100;
+	my $x      = $params{x} || $FULL_MOON;
+	my $y      = $params{y} || $FULL_MOON;
+	my $r      = $params{r} || $FULL_MOON;
 	my $svg    = $self->{svg};
-	my $error  = 2 * pi / 56;         # approx error of less than one lunar day
 	my $style  = q//;
+
+	# approx error of less than one lunar day
+	my $error = 2 * pi / 56;  ## no critic
 
 	# extra testing
 	my $g = $svg->g( id => "extra_$id", class => 'moon', );
 
 	# moon phases 0 == new moon 3 == last quarter
 
-	$r ||= 100;
 	my ( $sx, $sy ) = ( $x, $y );
 	my ( $ex, $ey ) = ( $x, $y + 2 * $r );
 
 	if ( $phase < $error || 2 * pi - $error < $phase ) {
 
-		#carp "New moon\n";
+		# New moon
 		$style = 'stroke: red';
 	}
 	elsif ( pi - $error < $phase && $phase < pi + $error ) {
@@ -388,44 +421,38 @@ sub moon {
 			cy    => ( $sy + $ey ) / 2,
 			r     => $r,
 		);
-
-		#carp "Full moon\n";
 	}
 	elsif ( $phase < pi ) {
 
 		# moon waxing partial
 		my $d = "M $sx\t$sy C ";
-		$d .= ( $sx + $r * 1.34 ) . q/ / . $sy . q/,/;
-		$d .= ( $sx + $r * 1.34 ) . q/ / . $ey;
+		$d .= ( $sx + $r * $MOON_RADIAL_STEP ) . q/ / . $sy . q/,/;
+		$d .= ( $sx + $r * $MOON_RADIAL_STEP ) . q/ / . $ey;
 		$d .= ",$ex\t$ey C ";
-		$d .= ( $ex - $r * 1.34 * ( -cos($phase) ) ) . q/ / . ( $ey + $r / 2 * ( -sin($phase) ) ) . q/,/;
-		$d .= ( $ex - $r * 1.34 * ( -cos($phase) ) ) . q/ / . ( $sy - $r / 2 * ( -sin($phase) ) );
+		$d .= ( $ex - $r * $MOON_RADIAL_STEP * ( -cos($phase) ) ) . q/ / . ( $ey + $r / 2 * ( -sin($phase) ) ) . q/,/;
+		$d .= ( $ex - $r * $MOON_RADIAL_STEP * ( -cos($phase) ) ) . q/ / . ( $sy - $r / 2 * ( -sin($phase) ) );
 		$d .= ", $sx\t$sy Z";
 		$g->path(
 			id    => $id,
 			style => q//,
 			d     => $d,
 		);
-
-		#carp "waxing\t\t$d\n";
 	}
 	elsif ( $phase > pi ) {
 
 		# moon waning partial
 		my $d = "M $sx\t$sy C ";
-		$d .= ( $sx - $r * 1.34 ) . q/ / . $sy . q/,/;
-		$d .= ( $sx - $r * 1.34 ) . q/ / . $ey;
+		$d .= ( $sx - $r * $MOON_RADIAL_STEP ) . q/ / . $sy . q/,/;
+		$d .= ( $sx - $r * $MOON_RADIAL_STEP ) . q/ / . $ey;
 		$d .= ",$ex\t$ey C ";
-		$d .= ( $ex + $r * 1.34 * ( -cos($phase) ) ) . q/ / . ( $ey - $r / 2 * ( -sin($phase) ) ) . q/,/;
-		$d .= ( $ex + $r * 1.34 * ( -cos($phase) ) ) . q/ / . ( $sy + $r / 2 * ( -sin($phase) ) );
+		$d .= ( $ex + $r * $MOON_RADIAL_STEP * ( -cos($phase) ) ) . q/ / . ( $ey - $r / 2 * ( -sin($phase) ) ) . q/,/;
+		$d .= ( $ex + $r * $MOON_RADIAL_STEP * ( -cos($phase) ) ) . q/ / . ( $sy + $r / 2 * ( -sin($phase) ) );
 		$d .= ", $sx\t$sy Z";
 		$g->path(
 			id    => $id,
 			style => q//,
 			d     => $d,
 		);
-
-		#carp "waning\t\t$d\n";
 	}
 
 	$g->circle(
@@ -456,20 +483,21 @@ sub get_moon_phase {
 	if ( !$self->{moon_phase} ) {
 		my @packages = qw/Astro::Coord::ECI::Moon Astro::MoonPhase/;
 
+		PACKAGE:
 		for my $package (@packages) {
 			my $package_file = $package;
 			$package_file =~ s{::}{/}gxms;
 
-			require $package_file . '.pm';
+			eval{ require $package_file . '.pm' };
 			if ( !$EVAL_ERROR ) {
 				$self->{moon_phase} = $package;
-				last;
+				last PACKAGE;
 			}
 		}
 
 		# croak if there is no way to calculate the phase of the moon
 		if ( !$self->{moon_phase} ) {
-			croak "Cannot find any packages installed to calculate the moon phase\nTry installing one of:\ncpan "
+			die "Cannot find any packages installed to calculate the moon phase\nTry installing one of:\ncpan "
 				. join( "\ncpan ", @packages ) . "\n";
 		}
 	}
@@ -490,7 +518,7 @@ sub get_moon_phase {
 
 		# phase in degrees
 		($phase) = DateTime::Util::Astro::Moon::lunar_phase( DateTime->new( $date->epoch() ) );
-		$phase *= 2 * pi / 360;
+		$phase *= 2 * pi / $FULL_CIRCLE_DEGREES;
 	}
 
 	return $phase;
