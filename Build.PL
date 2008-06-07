@@ -17,6 +17,7 @@ my $build = Module::Build->new(
 		'Image::ExifTool'              => '7.0', # '7.15',
 		'Class::Date'                  => '1.1.7',
 		'Clone'                        => '0.17',
+		'Readonly'                     => '1.03',
 	},
 	build_requires => {
 		'Test::More' => 0,

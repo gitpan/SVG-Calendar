@@ -2,6 +2,7 @@ Changes
 Build.PL
 Makefile.PL
 MANIFEST
+LICENSE
 README
 lib/SVG/Calendar.pm
 t/00-load.t

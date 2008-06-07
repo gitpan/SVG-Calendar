@@ -14,6 +14,7 @@ WriteMakefile
                            'Class::Date' => '1.1.7',
                            'Template::Provider::FromDATA' => '0.08',
                            'Template' => '2.14',
+                           'Readonly' => '1.03',
                            'SVG' => '2.33',
                            'Test::More' => 0,
                            'Image::ExifTool' => '7.0',

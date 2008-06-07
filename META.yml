@@ -1,6 +1,6 @@
 ---
 name: SVG-Calendar
-version: 0.0.5
+version: 0.0.6
 author:
   - 'Ivan Wills <ivan.wills@gmail.com>'
 abstract: Creates calendars in SVG format which can be printed
@@ -12,6 +12,7 @@ requires:
   Clone: 0.17
   Image::ExifTool: 7.0
   Math::Trig: 1.15
+  Readonly: 1.03
   SVG: 2.33
   Template: 2.14
   Template::Provider::FromDATA: 0.08
@@ -21,7 +22,7 @@ build_requires:
 provides:
   SVG::Calendar:
     file: lib/SVG/Calendar.pm
-    version: 0.0.5
+    version: 0.0.6
 generated_by: Module::Build version 0.2808
 meta-spec:
   url: http://module-build.sourceforge.net/META-spec-v1.2.html

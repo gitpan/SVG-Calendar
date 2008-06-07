@@ -1,5 +1,8 @@
 Revision history for Perl extension App::Accounting.
 
+0.0.6 Sat June 7 20:17:00 2008
+	- Added missing required module Readonly to list of required modules.
+
 0.0.5 Thu June 5 11:21:00 2008
 	- Some documentation updates
 	- Fixes for perlcritic and kwalitee
