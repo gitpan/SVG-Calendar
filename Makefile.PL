@@ -2,23 +2,23 @@
 use ExtUtils::MakeMaker;
 WriteMakefile
 (
-          'PL_FILES' => {},
-          'INSTALLDIRS' => 'site',
           'NAME' => 'SVG::Calendar',
+          'VERSION_FROM' => 'lib/SVG/Calendar.pm',
+          'PREREQ_PM' => {
+                           'Class::Date' => '1.1.7',
+                           'Clone' => '0.17',
+                           'Image::ExifTool' => '7.0',
+                           'Math::Trig' => '1.15',
+                           'Readonly' => '1.03',
+                           'SVG' => '2.33',
+                           'Template' => '2.14',
+                           'Template::Provider::FromDATA' => '0.08',
+                           'Test::More' => '0'
+                         },
+          'INSTALLDIRS' => 'site',
           'EXE_FILES' => [
                            'bin/svgcal.pl'
                          ],
-          'VERSION_FROM' => 'lib/SVG/Calendar.pm',
-          'PREREQ_PM' => {
-                           'Math::Trig' => '1.15',
-                           'Class::Date' => '1.1.7',
-                           'Template::Provider::FromDATA' => '0.08',
-                           'Template' => '2.14',
-                           'Readonly' => '1.03',
-                           'SVG' => '2.33',
-                           'Test::More' => 0,
-                           'Image::ExifTool' => '7.0',
-                           'Clone' => '0.17'
-                         }
+          'PL_FILES' => {}
         )
 ;

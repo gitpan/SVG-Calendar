@@ -1,4 +1,4 @@
-#!/usr/bin/perl -t
+#!/usr/bin/perl
 
 # Created on: 2006-05-05 22:44:23
 # Create by:  ivan
@@ -16,7 +16,7 @@ use Config::Std;
 use Data::Dumper qw/Dumper/;
 use SVG::Calendar;
 
-our $VERSION = version->new('0.1.1');
+our $VERSION = version->new('0.2.0');
 
 my %option = (
 	moon     => {},
@@ -83,6 +83,13 @@ sub main {
 		}
 	}
 
+	if (@ARGV) {
+		for my $img (grep {/=/} @ARGV) {
+			my ($month, $src) = split /=/, $img, 2;
+			$option{image}{$month} = $src;
+		}
+	}
+
 	if ( $option{'show-template'} ) {
 		show_template();
 	}
@@ -143,6 +150,9 @@ OPTION:
 	if ( $option{template} ) {
 		$config{template} = $option{template};
 	}
+	if ( $option{image} ) {
+		$config{image} = $option{image};
+	}
 
 	if ( $option{save} && -f $option{config} ) {
 		write_config %config;
@@ -159,7 +169,7 @@ svgcal.pl - Creates the pages for a calendar in SVG format
 
 =head1 VERSION
 
-This documentation refers to svgcal.pl version 0.1.
+This documentation refers to svgcal.pl version 0.2.0.
 
 =head1 SYNOPSIS
 
@@ -167,6 +177,7 @@ This documentation refers to svgcal.pl version 0.1.
    svgcal.pl [--verbose | --VERSION | --help | --man]
 
  OPTIONS:
+  -o --out=str   The base file name when out putting multiple months
   -d --date      Parameters that control the months displaied on the
                  calendar
     start=YYYY-MM   Start month
@@ -174,6 +185,7 @@ This documentation refers to svgcal.pl version 0.1.
     year=YYYY       Year to base the whole calendar on (Default next year)
     month=YYYY-MM   Display only this month
   -m --moon      Moon parameters
+    display=1       Display the moon on individual days
     quarters=1|0    Show only whole quarters
     vpos=top|bottom Specifies which quadrent the moon should appear in
     hpos=left|right as above

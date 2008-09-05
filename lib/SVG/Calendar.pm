@@ -23,7 +23,7 @@ use Image::ExifTool qw/ImageInfo/;
 use English '-no_match_vars';
 use base qw/Exporter/;
 
-our $VERSION   = version->new('0.0.6');
+our $VERSION   = version->new('0.1.0');
 our @EXPORT_OK = qw//;
 
 Readonly my $MARGIN_RATIO             => 0.04;
@@ -169,7 +169,7 @@ sub init {
 	# get the month display stuff
 	$temp{month} = {
 		x     => $temp{bb}{x} + $col_margin_width * 2,
-		y     => $temp{bb}{y} - $ymargin,
+		y     => $temp{bb}{y} - $ymargin/2,
 		style => 'font-size: ' . ($row_height),
 	};
 
@@ -233,20 +233,18 @@ sub get_page {
 
 sub output_year {
 
-	my ( $self, @params ) = shift;
-	my ( $year, $start, $end, $file );
+	my ( $self, @params ) = @_;
+	my $file = pop @params;
+	my ( $start, $end ) = @params;
 
-	if ( @params == 3 ) {                           ## no critic
-		( $start, $end, $file ) = @params;
+	if ($end) {
 		$start = Class::Date->new("$start-01");
 		$end   = Class::Date->new("$end-01");
 	}
 	else {
-		( $year, $file ) = @params;
-		$start = Class::Date->new("$year-01-01");
+		$start = Class::Date->new("$start-01-01");
 		$end   = $start + $INTERVAL_ELEVEN_MONTHS;
 	}
-	carp "$start - $end";
 
 	my @files;
 	while ( $start <= $end ) {
@@ -266,7 +264,10 @@ sub output_month {
 
 	# add the month specific details to a clone of the general settings
 	my $templ = clone $self->{template};
-	my $svg   = $self->{svg};
+	my %size  = $self->get_page();
+	my $svg   = SVG->new( -raiseerror => 1, %size, );
+	$self->{svg}       = $svg;
+	$self->{full_moon} = 0;
 
 	carp "Month '$month' is not the correct format (YYYY-MM) " if !$month || $month !~ /\A\d{4}-\d{2}\Z/xms;
 
@@ -335,8 +336,19 @@ sub output_month {
 			if ( $info->{ImageHeight} && $info->{ImageWidth} ) {
 				$templ->{image}{x}      = $self->{page}{x_margin};
 				$templ->{image}{y}      = $self->{page}{y_margin};
-				$templ->{image}{width}  = $info->{ImageWidth};    # $self->{page}{width}  - 2 * $self->{page}{x_margin};
-				$templ->{image}{height} = $info->{ImageHeight};   #$self->{page}{height} / 2 - $self->{page}{y_margin};
+				$templ->{image}{width}  = $self->{page}{width}  - 2 * $self->{page}{x_margin};
+				$templ->{image}{height} = $self->{page}{height} / 2 - $self->{page}{y_margin} * 2;
+
+				my $image_scale = $info->{ImageHeight} / $info->{ImageWidth};
+				my $page_scale = $templ->{image}{height} / $templ->{image}{width};
+
+				if ($image_scale < $page_scale) {
+					$templ->{image}{height} *= $page_scale / $image_scale;
+				}
+				else {
+					$templ->{image}{x}     += ( $templ->{image}{width} - ( $templ->{image}{width} * $page_scale / $image_scale ) ) / 2;
+					$templ->{image}{width} *= $page_scale / $image_scale;
+				}
 			}
 		}
 	}
@@ -348,7 +360,6 @@ sub output {
 
 	my ( $self, $file, $template ) = @_;
 
-	#my $svg	= $self->{svg};
 	my $fh;
 	my %option = ( EVAL_PERL => 1 );
 	if ( $self->{path} ) {
@@ -361,7 +372,6 @@ sub output {
 
 	my $tmpl = $self->{tt} || Template->new(%option);
 
-	#my $text = $svg->xmlify();
 	my $text;
 	$tmpl->process( 'calendar.svg', $template, \$text )
 		or croak( $tmpl->error );
@@ -414,9 +424,10 @@ sub moon {
 	elsif ( pi - $error < $phase && $phase < pi + $error ) {
 
 		# approx full moon
+		my $colour = $self->{full_moon}++ ? 'blue' : 'black';
 		$g->circle(
 			id    => $id,
-			style => 'fill: blue; stroke: none',
+			style => "fill: $colour; stroke: none",
 			cx    => $x,
 			cy    => ( $sy + $ey ) / 2,
 			r     => $r,
@@ -488,7 +499,7 @@ sub get_moon_phase {
 			my $package_file = $package;
 			$package_file =~ s{::}{/}gxms;
 
-			eval{ require $package_file . '.pm' };
+			eval{ require $package_file . '.pm' };  ## no critic
 			if ( !$EVAL_ERROR ) {
 				$self->{moon_phase} = $package;
 				last PACKAGE;
@@ -534,7 +545,7 @@ SVG::Calendar - Creates calendars in SVG format which can be printed
 
 =head1 VERSION
 
-This documentation refers to SVG::Calendar version 0.1.
+This documentation refers to SVG::Calendar version 0.1.0.
 
 =head1 SYNOPSIS
 
@@ -754,7 +765,7 @@ __calendar.svg__
 		<![CDATA[
 			.bb {
 				fill:         none;
-				stroke:       blue;
+				stroke:       black;
 				stroke-width: 0.5;
 			}
 			.day, .week {
