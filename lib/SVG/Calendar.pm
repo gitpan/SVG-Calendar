@@ -23,7 +23,7 @@ use Image::ExifTool qw/ImageInfo/;
 use English '-no_match_vars';
 use base qw/Exporter/;
 
-our $VERSION   = version->new('0.1.0');
+our $VERSION   = version->new('0.1.1');
 our @EXPORT_OK = qw//;
 
 Readonly my $MARGIN_RATIO             => 0.04;
@@ -173,6 +173,13 @@ sub init {
 		style => 'font-size: ' . ($row_height),
 	};
 
+	# set up the year display
+	$temp{year} = {
+		x     => $temp{bb}{x} + $temp{bb}{width},
+		y     => $temp{bb}{y} - $ymargin/2,
+		style => 'text-align:end;text-anchor:end; font-size: ' . $row_height,
+	};
+
 	$self->{template} = \%temp;
 
 	return;
@@ -272,6 +279,7 @@ sub output_month {
 	carp "Month '$month' is not the correct format (YYYY-MM) " if !$month || $month !~ /\A\d{4}-\d{2}\Z/xms;
 
 	my $date = Class::Date->new("$month-01");
+	$templ->{year}{text}  = $date->year();
 	$templ->{month}{text} = $date->monthname();
 	my $month_day = $date - $INTERVAL_ONE_WEEK;
 	my $row       = 1;
@@ -545,7 +553,7 @@ SVG::Calendar - Creates calendars in SVG format which can be printed
 
 =head1 VERSION
 
-This documentation refers to SVG::Calendar version 0.1.0.
+This documentation refers to SVG::Calendar version 0.1.1.
 
 =head1 SYNOPSIS
 
@@ -817,6 +825,7 @@ __calendar.svg__
 		id="calendar"
 		inkscape:label="calendar">
 		<text id="month" x="[% month.x %]" y="[% month.y %]" style="[% month.style %]" >[% month.text %]</text>
+		<text id="year" x="[% year.x %]" y="[% year.y %]" style="[% year.style %]" >[% year.text %]</text>
 		<rect class="bb" id="a" style="" height="[% bb.height %]" width="[% bb.width %]" x="[% bb.x %]" y="[% bb.y %]" />
 		[% i = 0 -%]
 		[% FOREACH row IN cal -%]
