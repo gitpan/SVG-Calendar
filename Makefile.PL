@@ -13,7 +13,8 @@ WriteMakefile
                            'SVG' => '2.33',
                            'Template' => '2.14',
                            'Template::Provider::FromDATA' => '0.08',
-                           'Test::More' => '0'
+                           'Test::More' => '0',
+                           'version' => '0.74'
                          },
           'INSTALLDIRS' => 'site',
           'EXE_FILES' => [

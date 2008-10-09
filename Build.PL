@@ -18,6 +18,7 @@ my $build = Module::Build->new(
 		'Class::Date'                  => '1.1.7',
 		'Clone'                        => '0.17',
 		'Readonly'                     => '1.03',
+		'version'                      => '0.74',
 	},
 	build_requires => {
 		'Test::More' => 0,

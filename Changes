@@ -1,5 +1,8 @@
 Revision history for Perl extension SVG::Calendar
 
+0.1.2
+	Fixed missing version required module in Meta.yml
+
 0.1.1
 	- Added year display to calendar
 
