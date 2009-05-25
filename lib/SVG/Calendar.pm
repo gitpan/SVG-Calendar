@@ -23,7 +23,7 @@ use Image::ExifTool qw/ImageInfo/;
 use English '-no_match_vars';
 use base qw/Exporter/;
 
-our $VERSION   = version->new('0.1.2');
+our $VERSION   = version->new('0.1.3');
 our @EXPORT_OK = qw//;
 
 Readonly my $MARGIN_RATIO             => 0.04;
@@ -33,7 +33,7 @@ Readonly my $TEXT_OFFSET_Y            => 0.1;
 Readonly my $TEXT_OFFSET_X            => 0.15;
 Readonly my $TEXT_WIDTH_RATIO         => 0.1;
 Readonly my $TEXT_HEIGHT_RATIO        => 0.145;
-Readonly my $MOON_SCALE_WIDTH         => 0.05;
+Readonly my $MOON_SCALE_WIDTH         => 0.3;
 Readonly my $MOON_SCALE_HEIGHT        => 0.8;
 Readonly my $HEADING_WIDTH_SCALE      => 0.8;
 Readonly my $HEADING_HEIGHT_SCALE     => 0.45;
@@ -55,9 +55,8 @@ Readonly my $ONE_WEEK                 => 7;
 
 sub new {
 
-	my ( $caller, %param ) = @_;
-	my $class  = ( ref $caller ) ? ref $caller : $caller;
-	my $self   = clone \%param;
+	my ( $class, %param ) = @_;
+	my $self = clone \%param;
 
 	bless $self, $class;
 
@@ -77,20 +76,28 @@ sub init {
 	my $yu      = $self->{page}{height_unit};
 	my $xmargin = $self->{page}{margin} || $self->{page}{width} * $MARGIN_RATIO;
 	my $ymargin = $self->{page}{margin} || $self->{page}{height} * $MARGIN_RATIO;
-	$self->{svg}            = $svg;
-	$self->{page}{x_margin} = $xmargin;
-	$self->{page}{y_margin} = $ymargin;
+	$self->{svg}               = $svg;
+	$self->{page}{x_margin}    = $xmargin;
+	$self->{page}{y_margin}    = $ymargin;
+	$self->{moon}{xoffset}   ||= 0;
+	$self->{moon}{yoffset}   ||= 0;
+	$self->{calendar_height} ||= '0.5';
+	$self->{calendar_height}  =~ s/%//exms;
+	if ( $self->{calendar_height} > 1 ) {
+		# assume that the height is a percentage value and divide by 100
+		$self->{calendar_height} /= 100;
+	}
 
 	# cal bounding box (bb)
 	$temp{bb} = {
 		x      => $xmargin,
-		y      => ( $height / 2 + $ymargin ),
-		height => ( $height / 2 - $ymargin * 2 ),
+		y      => ( $height * ( 1 - $self->{calendar_height} ) + $ymargin ),
+		height => ( $height * $self->{calendar_height} - $ymargin * 2 ),
 		width  => ( $width - $xmargin * 2 ),
 	};
 
 	my $rows              = $MAX_WEEK_ROW + 1;
-	my $row_height        = $temp{bb}{height} / ( $rows + $ROUNDING_FACTOR );
+	my $row_height        = $temp{bb}{height} / ( $rows + $ROUNDING_FACTOR ) * ( 0.5 + $self->{calendar_height} );
 	my $row_margin_height = $row_height / ( $rows * 2 );
 	my $cols              = $DAY_COLS;
 	my $col_width         = $temp{bb}{width} / ( $cols + $ROUNDING_FACTOR );
@@ -128,7 +135,7 @@ sub init {
 		$temp{cal}[0][$count] = {
 			x      => $x,
 			y      => $y,
-			height => $row_height / 2,
+			height => $row_height * $self->{calendar_height},
 			width  => $col_width,
 			text   => {
 				text   => $day,
@@ -177,7 +184,7 @@ sub init {
 	$temp{year} = {
 		x     => $temp{bb}{x} + $temp{bb}{width},
 		y     => $temp{bb}{y} - $ymargin/2,
-		style => 'text-align:end;text-anchor:end; font-size: ' . $row_height,
+		style => 'text-align: end; text-anchor: end; font-size: ' . $row_height,
 	};
 
 	$self->{template} = \%temp;
@@ -256,7 +263,6 @@ sub output_year {
 	my @files;
 	while ( $start <= $end ) {
 		my $month = $start->strftime('%Y-%m');
-		carp $month;
 		push @files, "$file-$month.svg";
 		$self->output_month( $month, "$file-$month.svg" );
 		$start += $INTERVAL_ONE_MONTH;
@@ -312,8 +318,8 @@ sub output_month {
 			$templ->{cal}[$row][$wday]{moon} = $self->moon(
 				phase => $phase,
 				id    => 'moon_' . $month_day->strftime('%Y-%m-%d'),
-				x     => $templ->{cal}[$row][$wday]{x} + $r + $templ->{cal}[$row][$wday]{width} * $MOON_SCALE_WIDTH,
-				y     => $templ->{cal}[$row][$wday]{y} - $r + $templ->{cal}[$row][$wday]{height} * $MOON_SCALE_HEIGHT,
+				x     => $templ->{cal}[$row][$wday]{x} + $r + $templ->{cal}[$row][$wday]{width} * $MOON_SCALE_WIDTH   + $self->{moon}{xoffset},
+				y     => $templ->{cal}[$row][$wday]{y} - $r + $templ->{cal}[$row][$wday]{height} * $MOON_SCALE_HEIGHT + $self->{moon}{yoffset},
 				r     => $r,
 			);
 		}
@@ -345,13 +351,14 @@ sub output_month {
 				$templ->{image}{x}      = $self->{page}{x_margin};
 				$templ->{image}{y}      = $self->{page}{y_margin};
 				$templ->{image}{width}  = $self->{page}{width}  - 2 * $self->{page}{x_margin};
-				$templ->{image}{height} = $self->{page}{height} / 2 - $self->{page}{y_margin} * 2;
+				$templ->{image}{height} = $self->{page}{height} * (1 - $self->{calendar_height}) - $self->{page}{y_margin} * 2;
 
-				my $image_scale = $info->{ImageHeight} / $info->{ImageWidth};
-				my $page_scale = $templ->{image}{height} / $templ->{image}{width};
+				my $image_scale = $info->{ImageHeight}    / $info->{ImageWidth};
+				my $page_scale  = $templ->{image}{height} / $templ->{image}{width};
 
 				if ($image_scale < $page_scale) {
-					$templ->{image}{height} *= $page_scale / $image_scale;
+					$templ->{image}{y}      -= ( $templ->{image}{height} - ( $templ->{image}{height} * $page_scale / $image_scale ) ) / 2;
+					$templ->{image}{height} *= $image_scale / $page_scale;
 				}
 				else {
 					$templ->{image}{x}     += ( $templ->{image}{width} - ( $templ->{image}{width} * $page_scale / $image_scale ) ) / 2;
@@ -598,9 +605,10 @@ Initialises the calendar object
 
 =head3 C<get_page ( )>
 
-Return:  -
+Return: hash - contains the page height and width and the units used
 
-Description:
+Description: Gets the dimensions of the page based on the parameters
+supplied at creation time
 
 =head3 C<output_year ( ($start, $end | $year), $file  )>
 
@@ -672,16 +680,23 @@ Description:
      r="100"
      id="circle" />
 
+=head3 C<moon ( %params )>
 
-=head3 C<moon ( $var1, $var2,  )>
+Param: C<phase> - float - 0 <= $phase < 2 * pi, represents the phase of the moon
 
-Param: C<$phase> - float - 0 <= $phase < 2 * pi, represents the phase of the moon
+Param: C<id> - string - The id that the moon SVG part should use
 
-Param: C<$id> - string (detail) - description
+Param: C<x> - float - The X coordinate of the left hand side of the moon to be drawn
 
-Return:  -
+Param: C<y> - float - The Y coordinate of the top side of the moon to be drawn
 
-Description:
+Param: C<r> - float - The Radius of the the moon to be drawn
+
+Return: SVG part - The SVG to display the moon in the phase passed in
+
+Description: From the phase information this function calculates the details
+of the curve to represent the phase of the moon and puts it on the diagram
+based on the x, y and r parameters.
 
 =head3 C<get_moon_phase ( $date )>
 
@@ -746,7 +761,7 @@ Ivan Wills - (ivan.wills@gmail.com)
 
 =head1 LICENSE AND COPYRIGHT
 
-Copyright (c) 2006 Ivan Wills (101 Miles St Bald Hills QLD Australia 4036).
+Copyright (c) 2006-2009 Ivan Wills (14 Mullion Close, Hornsby Heights, NSW Australia 2077)
 All rights reserved.
 
 
@@ -815,7 +830,7 @@ __calendar.svg__
 	<g
 		inkscape:groupmode="layer"
 		id="image"
-		inkscape:label="image">
+		inkscape:label="Image">
 		[% IF image.src %]
 		<image xlink:href="[% image.src %]" x="[% image.x %]" y="[% image.y %]" height="[% image.height %]" width="[% image.width %]"/>
 		[% END %]
@@ -823,7 +838,7 @@ __calendar.svg__
 	<g
 		inkscape:groupmode="layer"
 		id="calendar"
-		inkscape:label="calendar">
+		inkscape:label="Calendar">
 		<text id="month" x="[% month.x %]" y="[% month.y %]" style="[% month.style %]" >[% month.text %]</text>
 		<text id="year" x="[% year.x %]" y="[% year.y %]" style="[% year.style %]" >[% year.text %]</text>
 		<rect class="bb" id="a" style="" height="[% bb.height %]" width="[% bb.width %]" x="[% bb.x %]" y="[% bb.y %]" />

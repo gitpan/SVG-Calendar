@@ -2,7 +2,7 @@
 
 use strict;
 use warnings;
-use Test::More tests => 19;
+use Test::More tests => 18;
 
 my $module = 'SVG::Calendar';
 
@@ -14,37 +14,14 @@ isa_ok( $cal, $module );
 
 can_ok( $cal, 'output' );
 
-# testing get_page
-$cal->{page} = 'A4';
-$cal->{width} = '';
-$cal->{height} = '';
-my %size = $cal->get_page();
-ok( $cal->{page}{width} == 210, ' A4 page width = 210' );
-is( $cal->{page}{width_unit}, 'mm', ' Default width units are mm' );
-ok( $cal->{page}{height} == 297, ' A4 page height = 297' );
-is( $cal->{page}{height_unit}, 'mm', ' Default height units are mm' );
+ok( $cal->output(), 'Try to generate output' );
+ok( $cal->output_month('2008-10'), 'Try to generate output for a month' );
 
-$cal->{page} = 'A3';
-$cal->{width} = '';
-$cal->{height} = '';
-%size = $cal->get_page();
-ok( $cal->{page}{width} == 297, ' A3 page width = 297' );
-is( $cal->{page}{width_unit}, 'mm', ' Default width units are mm' );
-ok( $cal->{page}{height} == 420, ' A3 page height = 420' );
-is( $cal->{page}{height_unit}, 'mm', ' Default height units are mm' );
+my @months = $cal->output_year('2008', 'test');
+ok( @months == 12, 'Try to generate output for a year' );
 
-$cal->{page} = { width => '1234', height => '5678' };
-%size = $cal->get_page();
-ok( $cal->{page}{width} == 1234, ' A3 page width('.$cal->{width}.') = 1234' );
-is( $cal->{page}{width_unit}, 'px', ' Default width units are px' );
-ok( $cal->{page}{height} == 5678, ' A3 page height('.$cal->{height}.') = 5678' );
-is( $cal->{page}{height_unit}, 'px', ' Default height units are px' );
-
-$cal->{page} = { width => '1234cm', height => '5678in' };
-%size = $cal->get_page();
-ok( $cal->{page}{width} == 1234, ' A3 page width('.$cal->{width}.') = 1234' );
-is( $cal->{page}{width_unit}, 'cm', ' width units are cm' );
-ok( $cal->{page}{height} == 5678, ' A3 page height('.$cal->{height}.') = 5678' );
-is( $cal->{page}{height_unit}, 'in', ' height units are in' );
-
-
+for my $file (@months) {
+	ok( -s $file, 'The month calandar has some size' );
+	# clean up
+	unlink $file;
+}

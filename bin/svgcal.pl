@@ -24,6 +24,7 @@ my %option = (
 	ical     => {},
 	page     => {},
 	image    => {},
+	height   => 0.5,
 	config   => "$ENV{HOME}/.svgcal",
 	path     => undef,
 	template => undef,
@@ -49,6 +50,7 @@ sub main {
 		'ical|c=s%',
 		'page|p=s%',
 		'image|i=s%',
+		'calendar_height|height|h=s',
 		'config|C=s',
 		'path|P=s',
 		'template|t=s',
@@ -201,6 +203,8 @@ This documentation refers to svgcal.pl version 0.2.0.
     src=file        This image will be used for any image with out a specific
                     month image.
     YYYY-MM=file    Use this image for the specified month
+  -h --height    The height on the page that the calendar shoud take up.
+                 Either a fraction or a percent (Default 50%)
   -C --config    Location of the configuration file (Default ~/.svgcal)
   -P --path=template path
                  Specify a colon seperated path to find templates in
@@ -244,7 +248,7 @@ Ivan Wills - (ivan.wills@gmail.com)
 
 =head1 LICENSE AND COPYRIGHT
 
-Copyright (c) 2006 Ivan Wills (101 Miles St Bald Hills QLD Australia 4036).
+Copyright (c) 2006-2009 Ivan Wills (14 Mullion Close, Hornsby Heights, NSW, Australia 2077)
 All rights reserved.
 
 This module is free software; you can redistribute it and/or modify it under
