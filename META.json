@@ -1,0 +1,71 @@
+{
+   "abstract" : "Creates calendars in SVG format which can be printed",
+   "author" : [
+      "Ivan Wills <ivan.wills@gmail.com>"
+   ],
+   "dynamic_config" : 1,
+   "generated_by" : "Module::Build version 0.38, CPAN::Meta::Converter version 2.112150",
+   "license" : [
+      "perl_5"
+   ],
+   "meta-spec" : {
+      "url" : "http://search.cpan.org/perldoc?CPAN::Meta::Spec",
+      "version" : "2"
+   },
+   "name" : "SVG-Calendar",
+   "prereqs" : {
+      "build" : {
+         "requires" : {
+            "Test::Kwalitee" : 0,
+            "Test::More" : 0,
+            "Test::Perl::Critic" : 0,
+            "Test::Pod" : 0,
+            "Test::Pod::Coverage" : 0,
+            "Test::Spelling" : 0
+         }
+      },
+      "configure" : {
+         "requires" : {
+            "Module::Build" : "0.38"
+         }
+      },
+      "runtime" : {
+         "recommends" : {
+            "Astro::Coord::ECI::Moon" : "0.044",
+            "Astro::MoonPhase" : "0.6"
+         },
+         "requires" : {
+            "Clone" : "0.17",
+            "Config::Std" : 0,
+            "DateTime::Format::Strptime" : 0,
+            "Image::ExifTool" : "7.0",
+            "Math::Trig" : "1.15",
+            "Readonly" : "1.03",
+            "SVG" : "2.33",
+            "Template" : "2.14",
+            "Template::Provider::FromDATA" : "0.08",
+            "perl" : "5.008",
+            "version" : "0.74"
+         }
+      }
+   },
+   "provides" : {
+      "SVG::Calendar" : {
+         "file" : "lib/SVG/Calendar.pm",
+         "version" : "v0.3.0"
+      }
+   },
+   "release_status" : "stable",
+   "resources" : {
+      "bugtracker" : {
+         "web" : "http://rt.cpan.org/NoAuth/Bugs.html?Dist=SVG-Calendar"
+      },
+      "license" : [
+         "http://dev.perl.org/licenses/"
+      ],
+      "repository" : {
+         "url" : "http://github.com/ivanwills/SVG-Calendar"
+      }
+   },
+   "version" : "v0.3.0"
+}
