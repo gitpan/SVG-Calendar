@@ -15,17 +15,13 @@ WriteMakefile
                    'SVG' => '2.33',
                    'Template' => '2.14',
                    'Template::Provider::FromDATA' => '0.08',
-                   'Test::Kwalitee' => 0,
                    'Test::More' => 0,
-                   'Test::Perl::Critic' => 0,
-                   'Test::Pod' => 0,
-                   'Test::Pod::Coverage' => 0,
-                   'Test::Spelling' => 0,
                    'version' => '0.74'
                  },
   'INSTALLDIRS' => 'site',
   'EXE_FILES' => [
-                   'bin/svgcal.pl'
+                   'bin/svgcal.pl',
+                   'bin/svgcal.pl~'
                  ],
   'PL_FILES' => {}
 )
