@@ -20,8 +20,7 @@ WriteMakefile
                  },
   'INSTALLDIRS' => 'site',
   'EXE_FILES' => [
-                   'bin/svgcal.pl',
-                   'bin/svgcal.pl~'
+                   'bin/svgcal.pl'
                  ],
   'PL_FILES' => {}
 )
