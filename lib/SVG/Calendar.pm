@@ -23,7 +23,7 @@ use Image::ExifTool qw/ImageInfo/;
 use English '-no_match_vars';
 use base qw/Exporter/;
 
-our $VERSION   = version->new('0.3.3');
+our $VERSION   = version->new('0.3.4');
 our @EXPORT_OK = qw//;
 
 Readonly my $MARGIN_RATIO             => 0.04;
@@ -49,7 +49,7 @@ Readonly my $INTERVAL_ONE_MONTH       => DateTime::Duration->new(months => 1);
 Readonly my $INTERVAL_ELEVEN_MONTHS   => DateTime::Duration->new(months => 11);
 Readonly my $FULL_MOON                => 100;
 Readonly my $MOON_RADIAL_STEP         => 1.34;
-Readonly my $MOON_AT_NIGHT            => q{20};
+Readonly my $MOON_AT_NIGHT            => DateTime::Duration->new(hours => 20);
 Readonly my $FULL_CIRCLE_DEGREES      => 360;
 Readonly my $ONE_WEEK                 => 7;
 
@@ -573,7 +573,7 @@ SVG::Calendar - Creates calendars in SVG format which can be printed
 
 =head1 VERSION
 
-This documentation refers to SVG::Calendar version 0.3.3.
+This documentation refers to SVG::Calendar version 0.3.4.
 
 =head1 SYNOPSIS
 

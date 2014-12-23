@@ -4,7 +4,7 @@
       "Ivan Wills <ivan.wills@gmail.com>"
    ],
    "dynamic_config" : 1,
-   "generated_by" : "Module::Build version 0.4204",
+   "generated_by" : "Module::Build version 0.421",
    "license" : [
       "perl_5"
    ],
@@ -16,7 +16,8 @@
    "prereqs" : {
       "build" : {
          "requires" : {
-            "Test::More" : "0"
+            "Test::More" : "0",
+            "Test::Warnings" : "0"
          }
       },
       "configure" : {
@@ -41,9 +42,10 @@
             "Math::Trig" : "1.15",
             "Readonly" : "1.03",
             "SVG" : "2.33",
+            "Scalar::Util" : "0",
             "Template" : "2.14",
             "Template::Provider::FromDATA" : "0.08",
-            "perl" : "5.008",
+            "perl" : "5.006",
             "version" : "0.74"
          }
       }
@@ -51,7 +53,7 @@
    "provides" : {
       "SVG::Calendar" : {
          "file" : "lib/SVG/Calendar.pm",
-         "version" : "v0.3.3"
+         "version" : "v0.3.4"
       }
    },
    "release_status" : "stable",
@@ -66,5 +68,5 @@
          "url" : "git://github.com/ivanwills/SVG-Calendar.git"
       }
    },
-   "version" : "v0.3.3"
+   "version" : "v0.3.4"
 }
