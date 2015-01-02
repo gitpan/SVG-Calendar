@@ -14,16 +14,15 @@ use Scalar::Util qw/blessed/;
 use Data::Dumper qw/Dumper/;
 use Clone qw/clone/;
 use Math::Trig;
-use SVG;
 use DateTime::Format::Strptime qw/strptime strftime/;
 use Template;
-use Template::Provider::FromDATA;
+use File::ShareDir qw/dist_dir/;
 use Readonly;
 use Image::ExifTool qw/ImageInfo/;
 use English '-no_match_vars';
 use base qw/Exporter/;
 
-our $VERSION   = version->new('0.3.5');
+our $VERSION   = version->new('0.3.6');
 our @EXPORT_OK = qw//;
 
 Readonly my $MARGIN_RATIO             => 0.04;
@@ -69,14 +68,12 @@ sub init {
     my $self    = shift;
     my %size    = $self->get_page();
     my %temp    = ( page => \%size, xu => $self->{page}{width_unit}, yu => $self->{page}{height_unit}, );
-    my $svg     = SVG->new( -raiseerror => 1, %size, );
     my $height  = $self->{page}{height};
     my $width   = $self->{page}{width};
     my $xu      = $self->{page}{width_unit};
     my $yu      = $self->{page}{height_unit};
     my $xmargin = $self->{page}{margin} || $self->{page}{width} * $MARGIN_RATIO;
     my $ymargin = $self->{page}{margin} || $self->{page}{height} * $MARGIN_RATIO;
-    $self->{svg}               = $svg;
     $self->{page}{x_margin}    = $xmargin;
     $self->{page}{y_margin}    = $ymargin;
     $self->{moon}{xoffset}   ||= 0;
@@ -87,6 +84,7 @@ sub init {
         # assume that the height is a percentage value and divide by 100
         $self->{calendar_height} /= 100;
     }
+    $self->{classes} = {};
 
     # cal bounding box (bb)
     $temp{bb} = {
@@ -280,8 +278,6 @@ sub output_month {
     # add the month specific details to a clone of the general settings
     my $templ = clone $self->{template};
     my %size  = $self->get_page();
-    my $svg   = SVG->new( -raiseerror => 1, %size, );
-    $self->{svg}       = $svg;
     $self->{full_moon} = 0;
 
     carp "Month '$month' is not the correct format (YYYY-MM) " if !$month || $month !~ /\A\d{4}-\d{2}\Z/xms;
@@ -385,12 +381,9 @@ sub output {
 
     my $fh;
     my %option = ( EVAL_PERL => 1 );
+    $option{INCLUDE_PATH} = dist_dir('SVG-Calendar');
     if ( $self->{path} ) {
-        $option{INCLUDE_PATH} = $self->{path};
-    }
-    else {
-        my $provider = Template::Provider::FromDATA->new( { CLASSES => __PACKAGE__ } );
-        $option{LOAD_TEMPLATES} = [$provider];
+        $option{INCLUDE_PATH} .= ':' . $self->{path};
     }
 
     my $tmpl = $self->{tt} || Template->new(%option);
@@ -428,7 +421,6 @@ sub output {
 }
 
 sub moon {
-
     my ( $self, %params ) = @_;
 
     my $phase  = $params{phase};
@@ -436,14 +428,12 @@ sub moon {
     my $x      = $params{x} || $FULL_MOON;
     my $y      = $params{y} || $FULL_MOON;
     my $r      = $params{r} || $FULL_MOON;
-    my $svg    = $self->{svg};
-    my $style  = q//;
+    my $class  = q//;
 
     # approx error of less than one lunar day
     my $error = 2 * pi / 56;  ## no critic
 
-    # extra testing
-    my $g = $svg->g( id => "extra_$id", class => 'moon', );
+    my $moon = { id => $id };
 
     # moon phases 0 == new moon 3 == last quarter
 
@@ -451,21 +441,20 @@ sub moon {
     my ( $ex, $ey ) = ( $x, $y + 2 * $r );
 
     if ( $phase < $error || 2 * pi - $error < $phase ) {
-
-        # New moon
-        $style = 'stroke: grey';
+        $class = ' new-moon';
     }
     elsif ( pi - $error < $phase && $phase < pi + $error ) {
 
         # approx full moon
-        my $colour = $self->{full_moon}++ ? 'blue' : 'black';
-        $g->circle(
+        my $moon_type = $self->{full_moon}++ ? 'blue-moon' : 'full-moon';
+        $moon->{highlight} = {
+            type  => 'circle',
             id    => $id,
-            style => "fill: $colour; stroke: none",
+            class => $moon_type,
             cx    => $x,
             cy    => ( $sy + $ey ) / 2,
             r     => $r,
-        );
+        };
     }
     elsif ( $phase < pi ) {
 
@@ -477,11 +466,11 @@ sub moon {
         $d .= ( $ex - $r * $MOON_RADIAL_STEP * ( -cos($phase) ) ) . q/ / . ( $ey + $r / 2 * ( -sin($phase) ) ) . q/,/;
         $d .= ( $ex - $r * $MOON_RADIAL_STEP * ( -cos($phase) ) ) . q/ / . ( $sy - $r / 2 * ( -sin($phase) ) );
         $d .= ", $sx\t$sy Z";
-        $g->path(
+        $moon->{highlight} = {
+            type  => 'path',
             id    => $id,
-            style => q//,
             d     => $d,
-        );
+        };
     }
     elsif ( $phase > pi ) {
 
@@ -493,23 +482,22 @@ sub moon {
         $d .= ( $ex + $r * $MOON_RADIAL_STEP * ( -cos($phase) ) ) . q/ / . ( $ey - $r / 2 * ( -sin($phase) ) ) . q/,/;
         $d .= ( $ex + $r * $MOON_RADIAL_STEP * ( -cos($phase) ) ) . q/ / . ( $sy + $r / 2 * ( -sin($phase) ) );
         $d .= ", $sx\t$sy Z";
-        $g->path(
+        $moon->{highlight} = {
+            type  => 'path',
             id    => $id,
-            style => q//,
             d     => $d,
-        );
+        };
     }
 
-    $g->circle(
+    $moon->{border} = {
         id    => "moon_border_$id",
-        class => 'outline',
-        style => $style,
+        class => "outline$class",
         cx    => $x,
         cy    => ( $sy + $ey ) / 2,
         r     => $r,
-    );
+    };
 
-    return $g->xmlify();
+    return $moon;
 }
 
 sub get_moon_phase {
@@ -573,7 +561,7 @@ SVG::Calendar - Creates calendars in SVG format which can be printed
 
 =head1 VERSION
 
-This documentation refers to SVG::Calendar version 0.3.5.
+This documentation refers to SVG::Calendar version 0.3.6.
 
 =head1 SYNOPSIS
 
@@ -788,98 +776,3 @@ without even the implied warranty of MERCHANTABILITY or FITNESS FOR A
 PARTICULAR PURPOSE.
 
 =cut
-
-__calendar.svg__
-<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.0//EN" "http://www.w3.org/TR/2001/REC-SVG-20010904/DTD/svg10.dtd">
-<svg height="[% page.height %][% yu %]"
-	width="[% page.width %][% xu %]"
-	viewBox="0 0 [% page.width %] [% page.height %]"
-	xmlns="http://www.w3.org/2000/svg"
-	xmlns:xlink="http://www.w3.org/1999/xlink"
-	xmlns:sodipodi="http://inkscape.sourceforge.net/DTD/sodipodi-0.dtd"
-	xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape">
-	<defs>
-		<style >
-		<![CDATA[
-			.bb {
-				fill:         none;
-				stroke:       black;
-				stroke-width: 0.5;
-			}
-			.day, .week {
-				text-anchor:  middle;
-			}
-			.xx {
-				fill:         none;
-				stroke:       black;
-				stroke-width: 0.5;
-			}
-			.mday {
-				fill:         silver;
-				text-anchor:  right;
-			}
-			.current_month {
-				fill:         black;
-			}
-			.moon circle {
-				stroke-width: 25%;
-				fill:         none;
-			}
-			g.mday {
-				fill:         silver;
-				fill-opacity: 50%;
-			}
-			g.mday circle {
-				stroke:       silver;
-			}
-			g.current_month {
-				fill:         black;
-				fill-opacity: 1;
-			}
-			g.current_month circle {
-				stroke:       black;
-			}
-		]]>
-		</style>
-	</defs>
-	<g
-		inkscape:groupmode="layer"
-		id="image"
-		inkscape:label="Image">
-		[% IF image.src %]
-		<image xlink:href="[% image.src %]" x="[% image.x %]" y="[% image.y %]" height="[% image.height %]" width="[% image.width %]"/>
-		[% END %]
-	</g>
-	<g
-		inkscape:groupmode="layer"
-		id="calendar"
-		inkscape:label="Calendar">
-		<text id="month" x="[% month.x %]" y="[% month.y %]" style="[% month.style %]" >[% month.text %]</text>
-		<text id="year" x="[% year.x %]" y="[% year.y %]" style="[% year.style %]" >[% year.text %]</text>
-		<rect class="bb" id="a" style="" height="[% bb.height %]" width="[% bb.width %]" x="[% bb.x %]" y="[% bb.y %]" />
-		[% i = 0 -%]
-		[% FOREACH row IN cal -%]
-			[% j = 0 -%]
-			[% FOREACH col IN row %]
-		<g id="row[% i %]_col[% j %]" class="box [% IF current == 1 %]current[% ELSIF current == 2 %]off[% END %] [% col.text.class %]">
-			<rect class="xx" id="box_row[% i %]_col[% j %]" height="[% col.height %]" width="[% col.width %]" x="[% col.x %]" y="[% col.y %]" />
-			[% IF col.text %]<text
-				id="text_row[% i %]_col[% j %]"
-				class="[% col.text.class %]"
-				x="[% col.text.x %]"
-				y="[% col.text.y %]"
-				[% IF col.text.style %]style="[% col.text.style %]"[% END %]
-				[% IF col.text.length %]textLength="[% col.text.length %]"[% END %]
-				[% IF col.text.adjust %]lengthAdjust="[% col.text.adjust %]"[% END %]>
-				[% col.text.text %]
-			</text>[% END %]
-			[% IF col.moon %][% col.moon %][% END %]
-		</g>
-				[%- j=j+1 -%]
-			[% END -%]
-			[% i=i+1 -%]
-		[% END %]
-		[% extra %]
-	</g>
-</svg>

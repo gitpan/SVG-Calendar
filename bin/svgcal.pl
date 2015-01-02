@@ -15,8 +15,9 @@ use Pod::Usage;
 use Config::Std;
 use Data::Dumper qw/Dumper/;
 use SVG::Calendar;
+use Path::Tiny;
 
-our $VERSION = version->new('0.3.5');
+our $VERSION = version->new('0.3.6');
 
 my %option = (
     moon     => {},
@@ -138,15 +139,11 @@ sub main {
 }
 
 sub show_template {
-    my $found = 0;
-    while ( my $line = <SVG::Calendar::DATA> ) {
-        if ( $found ) {
-            print $line;
-        }
-        elsif ( $line =~ /^__calendar.svg__$/xms ) {
-            $found = 1;
-        }
-    }
+
+    require File::ShareDir;
+    my $dir = path( File::ShareDir::dist_dir('SVG-Calendar') );
+    print $dir->path('calendar.svg')->slurp;
+
     return exit 0;
 }
 
@@ -287,7 +284,7 @@ svgcal.pl - Creates the pages for a calendar in SVG format
 
 =head1 VERSION
 
-This documentation refers to svgcal.pl version 0.3.5.
+This documentation refers to svgcal.pl version 0.3.6.
 
 =head1 SYNOPSIS
 
